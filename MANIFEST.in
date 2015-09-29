@@ -1,0 +1,3 @@
+include requirements.txt
+recursive-include dbuild/templates *
+recursive-include dbuild/scripts *
