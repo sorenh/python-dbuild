@@ -16,8 +16,10 @@ def docker_client(url='unix://var/run/docker.sock'):
 
 def build_image(docker_client, path, tag):
     """ Build docker image"""
-    return ''.join(['\n'.join(line.values()) for line in docker_client.build(
-        path=path, rm=True, forcerm=True, tag=tag, decode=True)])
+    return '\n'.join((''.join(line.values()).strip() for line in docker_client.build(
+        path=path, rm=True, forcerm=True, tag=tag, decode=True)))
+    #return ''.join(['\n'.join(line.values()) for line in docker_client.build(
+    #    path=path, rm=True, forcerm=True, tag=tag, decode=True)])
 
 def create_container(docker_client, image, name=None, command=None, env=None,
         disable_network=False, shared_volumes=None, cwd=None):
@@ -119,7 +121,12 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
             build_rv = False
 
     shutil.rmtree(docker_path)
-    return build_rv
+    if build_rv:
+        return build_rv
+    elif build_type == 'source':
+        raise exceptions.DbuildSourceBuildFailedException('Source build FAILED')
+    elif build_type == 'binary':
+        raise exceptions.DbuildBinaryBuildFailedException('Binary build FAILED')
 
 def main(argv=sys.argv):
     ap = argparse.ArgumentParser(description='Build debian packages in docker container')
@@ -143,18 +150,25 @@ def main(argv=sys.argv):
         ap.print_help()
         sys.exit(1)
 
-    source_build_rv = docker_build(build_dir=args.build_dir,
+    try:
+        docker_build(build_dir=args.build_dir,
                 build_type='source', source_dir=args.source_dir,
                 force_rm=args.force_rm, docker_url=args.docker_url,
                 flavor=args.flavor, dist=args.dist)
-    if source_build_rv:
-        binary_build_rv = docker_build(build_dir=args.build_dir,
+    except exceptions.DbuildSourceBuildFailedException:
+        print 'ERROR | Source build failed for build directory: %s' % args.build_dir
+        return False
+
+    try:
+        docker_build(build_dir=args.build_dir,
                 build_type='binary', source_dir=args.source_dir,
                 force_rm=args.force_rm, docker_url=args.docker_url,
                 flavor=args.flavor, dist=args.dist)
-        return binary_build_rv
-    else:
-        return source_build_rv
+    except exceptions.DbuildBinaryBuildFailedException:
+        print 'ERROR | Binary build failed for build directory: %s' % args.build_dir
+        return False
+
+    return True
 
 if __name__ == "__main__":
     sys.exit(not main(sys.argv))
