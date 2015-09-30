@@ -15,8 +15,8 @@ def docker_client(url='unix://var/run/docker.sock'):
 
 def build_image(docker_client, path, tag):
     """ Build docker image"""
-    return [ ''.join(line.values()).strip() for line in docker_client.build(
-        path=path, rm=True, forcerm=True, tag=tag, decode=True)]
+    return ''.join(['\n'.join(line.values()) for line in docker_client.build(
+        path=path, rm=True, forcerm=True, tag=tag, decode=True)])
 
 def create_container(docker_client, image, name=None, command=None, env=None,
         disable_network=False, shared_volumes=None, cwd=None):
@@ -40,7 +40,7 @@ def start_container(docker_client, container):
     return response
 
 def wait_container(docker_client, container):
-    """ Wait the container to finish execution """
+    """ Wait  for the container to finish execution """
     rv = docker_client.wait(container=container)
     return rv
 
@@ -59,7 +59,7 @@ def docker_build(docker_path, build_dir, build_type, source_dir='source',
     print "Starting %s Package Build" % build_type
     image_tag='dbuild-' + flavor + '/' + dist
     response = build_image(c, docker_path, tag=image_tag )
-    print '\n'.join(response)
+    print response
 
     if build_type == 'source':
         command = ['dpkg-buildpackage', '-S', '-nc', '-uc', '-us']
@@ -113,19 +113,20 @@ def main(argv=sys.argv):
             autoescape=False,
             loader=FileSystemLoader(os.path.join(PATH, 'templates')),
             trim_blocks=False)
+    # Create docker_dir - a temporary directory which will have Dockerfile and
+    # scripts to build the container.
     docker_dir = mkdtemp()
     dockerfile = os.path.join(docker_dir, 'Dockerfile')
     ctxt = {'flavor': args.flavor, 'dist': args.dist,
             'maintainer': 'dbuild, dbuild@test.com', }
 
+    # Write Dockerfile under docker_dir
     with open(dockerfile, 'w') as d:
         dockerdata = TMPL_ENV.get_template('dockerfile.jinja').render(ctxt)
         d.write(dockerdata)
 
-    script_dir = os.path.join(PATH, 'scripts/')
-    for f in glob.glob(os.path.join(script_dir, '*')):
-        if os.path.isfile(f):
-            shutil.copy2(f, docker_dir)
+    # Copy scripts under docker_dir
+    shutil.copytree(os.path.join(PATH, 'scripts'), os.path.join(docker_dir, 'scripts'))
 
     source_build_rv = docker_build(docker_dir, build_dir=args.build_dir,
                 build_type='source', source_dir=args.source_dir,

@@ -1,4 +1,4 @@
 FROM {{ flavor }}:{{ dist }}
 MAINTAINER {{ maintainer }}
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y dpkg-dev aptitude build-essential ; mkdir -p /usr/lib/pbuilder/
-COPY pbuilder-satisfydepends* /usr/lib/pbuilder/
+COPY scripts/pbuilder-satisfydepends* /usr/lib/pbuilder/
