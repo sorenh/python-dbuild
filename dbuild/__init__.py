@@ -4,6 +4,7 @@ import sys
 import os
 import shutil
 import glob
+from dbuild import exceptions
 
 from jinja2 import Environment, FileSystemLoader
 from docker import Client
@@ -53,9 +54,35 @@ def remove_container(docker_client, container, force=False):
     """ Remove docker container """
     return docker_client.remove_container(container=container, force=force)
 
-def docker_build(docker_path, build_dir, build_type, source_dir='source',
-        force_rm=False, docker_url='unix://var/run/docker.sock', flavor='ubuntu', dist='trusty'):
+def create_docker_dir(flavor, dist):
+    PATH = os.path.dirname(os.path.abspath(__file__))
+    TMPL_ENV = Environment(
+            autoescape=False,
+            loader=FileSystemLoader(os.path.join(PATH, 'templates')),
+            trim_blocks=False)
+
+    # Create docker_dir - a temporary directory which will have Dockerfile and
+    # scripts to build the container.
+    docker_dir = mkdtemp()
+    dockerfile = os.path.join(docker_dir, 'Dockerfile')
+    ctxt = {'flavor': flavor, 'dist': dist,
+            'maintainer': 'dbuild, dbuild@test.com', }
+
+    # Write Dockerfile under docker_dir
+    with open(dockerfile, 'w') as d:
+        dockerdata = TMPL_ENV.get_template('dockerfile.jinja').render(ctxt)
+        d.write(dockerdata)
+
+    # Copy scripts under docker_dir
+    shutil.copytree(os.path.join(PATH, 'scripts'), os.path.join(docker_dir, 'scripts'))
+    return docker_dir
+
+def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
+        docker_url='unix://var/run/docker.sock', flavor='ubuntu', dist='trusty'):
     c = docker_client(docker_url)
+
+    docker_path=create_docker_dir(flavor, dist)
+
     print "Starting %s Package Build" % build_type
     image_tag='dbuild-' + flavor + '/' + dist
     response = build_image(c, docker_path, tag=image_tag )
@@ -68,7 +95,8 @@ def docker_build(docker_path, build_dir, build_type, source_dir='source',
         command = ['bash', '-c', "dpkg-source -x /build/*.dsc /build/pkgbuild/ && cd /build/pkgbuild && /usr/lib/pbuilder/pbuilder-satisfydepends && dpkg-buildpackage"]
         cwd = '/build'
     else:
-        raise Exception('Unknown build_type %s' % build_type)
+        shutil.rmtree(docker_path)
+        raise exceptions.DbuildBuildFailedException('Unknown build_type: %s' % build_type)
 
     container = create_container(c, image_tag,command=command, shared_volumes={build_dir: '/build'}, cwd=cwd)
     print(container)
@@ -80,15 +108,18 @@ def docker_build(docker_path, build_dir, build_type, source_dir='source',
     if rv == 0:
         print 'Build successful (build type: %s), removing container %s' % (build_type, container.get('Id'))
         remove_container(c, container, force=True)
-        return True
+        build_rv = True
     else:
         if force_rm:
             print "Build failed (build type: %s), Removing container %s" % (build_type, container.get('Id'))
             remove_container(c, container, force=True)
-            return False
+            build_rv = False
         else:
             print "Build failed (build type: %s), keeping container %s" % (build_type, container.get('Id'))
-            return False
+            build_rv = False
+
+    shutil.rmtree(docker_path)
+    return build_rv
 
 def main(argv=sys.argv):
     ap = argparse.ArgumentParser(description='Build debian packages in docker container')
@@ -107,40 +138,17 @@ def main(argv=sys.argv):
 
     args = ap.parse_args()
 
-    PATH = os.path.dirname(os.path.abspath(__file__))
-
-    TMPL_ENV = Environment(
-            autoescape=False,
-            loader=FileSystemLoader(os.path.join(PATH, 'templates')),
-            trim_blocks=False)
-    # Create docker_dir - a temporary directory which will have Dockerfile and
-    # scripts to build the container.
-    docker_dir = mkdtemp()
-    dockerfile = os.path.join(docker_dir, 'Dockerfile')
-    ctxt = {'flavor': args.flavor, 'dist': args.dist,
-            'maintainer': 'dbuild, dbuild@test.com', }
-
-    # Write Dockerfile under docker_dir
-    with open(dockerfile, 'w') as d:
-        dockerdata = TMPL_ENV.get_template('dockerfile.jinja').render(ctxt)
-        d.write(dockerdata)
-
-    # Copy scripts under docker_dir
-    shutil.copytree(os.path.join(PATH, 'scripts'), os.path.join(docker_dir, 'scripts'))
-
-    source_build_rv = docker_build(docker_dir, build_dir=args.build_dir,
+    source_build_rv = docker_build(build_dir=args.build_dir,
                 build_type='source', source_dir=args.source_dir,
                 force_rm=args.force_rm, docker_url=args.docker_url,
                 flavor=args.flavor, dist=args.dist)
     if source_build_rv:
-        binary_build_rv = docker_build(docker_dir, build_dir=args.build_dir,
+        binary_build_rv = docker_build(build_dir=args.build_dir,
                 build_type='binary', source_dir=args.source_dir,
                 force_rm=args.force_rm, docker_url=args.docker_url,
                 flavor=args.flavor, dist=args.dist)
-        shutil.rmtree(docker_dir)
         return binary_build_rv
     else:
-        shutil.rmtree(docker_dir)
         return source_build_rv
 
 if __name__ == "__main__":
