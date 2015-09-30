@@ -138,6 +138,11 @@ def main(argv=sys.argv):
 
     args = ap.parse_args()
 
+    if (not args.build_dir):
+        print 'build_dir must be provided'
+        ap.print_help()
+        sys.exit(1)
+
     source_build_rv = docker_build(build_dir=args.build_dir,
                 build_type='source', source_dir=args.source_dir,
                 force_rm=args.force_rm, docker_url=args.docker_url,
