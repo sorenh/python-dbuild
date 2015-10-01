@@ -3,7 +3,6 @@ import argparse
 import sys
 import os
 import shutil
-import glob
 from dbuild import exceptions
 
 from jinja2 import Environment, FileSystemLoader
@@ -18,11 +17,26 @@ def docker_client(url='unix://var/run/docker.sock'):
 
 def build_image(docker_client, path, tag):
     """ Build docker image"""
-    return '\n'.join((
-        ''.join(line.values()).strip() for line in docker_client.build(
-            path=path, rm=True, forcerm=True, tag=tag, decode=True)))
-    #return ''.join(['\n'.join(line.values()) for line in docker_client.build(
-    #    path=path, rm=True, forcerm=True, tag=tag, decode=True)])
+    lines = [line.values()[0] for line in docker_client.build(
+        path=path, rm=True, forcerm=True, tag=tag, decode=True)]
+    if any(isinstance(x, dict) for x in lines):
+        message = ''
+        for l in lines:
+            if isinstance(l, dict):
+                error = ''.join(l.values())
+                message += error
+            else:
+                message += l
+
+        raise exceptions.DbuildDockerBuildFailedException(
+            '''Docker build failed
+Error message: %s
+
+Full build messages
+
+%s''' % (error, message))
+    else:
+        return ''.join(lines)
 
 
 def create_container(docker_client, image, name=None, command=None, env=None,
@@ -66,7 +80,7 @@ def remove_container(docker_client, container, force=False):
     return docker_client.remove_container(container=container, force=force)
 
 
-def create_docker_dir(flavor, dist):
+def create_docker_dir(dist, release):
     PATH = os.path.dirname(os.path.abspath(__file__))
     TMPL_ENV = Environment(
         autoescape=False,
@@ -77,7 +91,7 @@ def create_docker_dir(flavor, dist):
     # scripts to build the container.
     docker_dir = mkdtemp()
     dockerfile = os.path.join(docker_dir, 'Dockerfile')
-    ctxt = {'flavor': flavor, 'dist': dist,
+    ctxt = {'dist': dist, 'release': release,
             'maintainer': 'dbuild, dbuild@test.com', }
 
     # Write Dockerfile under docker_dir
@@ -92,17 +106,16 @@ def create_docker_dir(flavor, dist):
 
 
 def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
-                 docker_url='unix://var/run/docker.sock', flavor='ubuntu',
-                 dist='trusty'):
+                 docker_url='unix://var/run/docker.sock', dist='ubuntu',
+                 release='trusty'):
     c = docker_client(docker_url)
 
-    docker_path = create_docker_dir(flavor, dist)
+    docker_path = create_docker_dir(dist, release)
 
     print "Starting %s Package Build" % build_type
-    image_tag = 'dbuild-' + flavor + '/' + dist
+    image_tag = 'dbuild-' + dist + '/' + release
     response = build_image(c, docker_path, tag=image_tag)
     print response
-
     if build_type == 'source':
         command = ['dpkg-buildpackage', '-S', '-nc', '-uc', '-us']
         cwd = '/build/' + source_dir
@@ -164,10 +177,10 @@ def main(argv=sys.argv):
     ap.add_argument('--docker_url', type=str,
                     default='unix://var/run/docker.sock',
                     help='Docker url, it can be unix socket or tcp url')
-    ap.add_argument('--flavor', type=str, default='ubuntu',
-                    help='Linux flavor to use for container to build')
-    ap.add_argument('--dist', type=str, default='trusty',
-                    help='Linux distribution')
+    ap.add_argument('--dist', type=str, default='ubuntu',
+                    help='Linux dist to use for container to build')
+    ap.add_argument('--release', type=str, default='trusty',
+                    help='Linux release name')
 
     args = ap.parse_args()
 
@@ -180,18 +193,20 @@ def main(argv=sys.argv):
         docker_build(build_dir=args.build_dir,
                      build_type='source', source_dir=args.source_dir,
                      force_rm=args.force_rm, docker_url=args.docker_url,
-                     flavor=args.flavor, dist=args.dist)
+                     dist=args.dist, release=args.release)
     except exceptions.DbuildSourceBuildFailedException:
-        print 'ERROR | Source build failed for build directory: %s' % args.build_dir
+        print 'ERROR | Source build failed for build directory: %s' \
+            % args.build_dir
         return False
 
     try:
         docker_build(build_dir=args.build_dir,
                      build_type='binary', source_dir=args.source_dir,
                      force_rm=args.force_rm, docker_url=args.docker_url,
-                     flavor=args.flavor, dist=args.dist)
+                     dist=args.dist, release=args.release)
     except exceptions.DbuildBinaryBuildFailedException:
-        print 'ERROR | Binary build failed for build directory: %s' % args.build_dir
+        print 'ERROR | Binary build failed for build directory: %s' \
+            % args.build_dir
         return False
 
     return True

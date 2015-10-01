@@ -2,6 +2,10 @@ class DbuildException(Exception):
     pass
 
 
+class DbuildDockerBuildFailedException(DbuildException):
+        pass
+
+
 class DbuildBuildFailedException(DbuildException):
     pass
 
