@@ -1,4 +1,11 @@
 FROM {{ dist }}:{{ release }}
 MAINTAINER {{ maintainer }}
+{%- if extra_repos_file %}
+COPY {{ extra_repos_file }} /etc/apt/sources.list.d/
+{%- endif %}
+{%- if extra_repo_keys_file %}
+COPY {{ extra_repo_keys_file }} /
+RUN apt-key add /{{ extra_repo_keys_file }}
+{%- endif %}
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y dpkg-dev aptitude build-essential ; mkdir -p /usr/lib/pbuilder/
 COPY scripts/pbuilder-satisfydepends* /usr/lib/pbuilder/

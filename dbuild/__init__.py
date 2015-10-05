@@ -80,19 +80,34 @@ def remove_container(docker_client, container, force=False):
     return docker_client.remove_container(container=container, force=force)
 
 
-def create_docker_dir(dist, release):
+def create_docker_dir(dist, release, extra_repos_file=None,
+                      extra_repo_keys_file=None):
     PATH = os.path.dirname(os.path.abspath(__file__))
     TMPL_ENV = Environment(
         autoescape=False,
         loader=FileSystemLoader(os.path.join(PATH, 'templates')),
         trim_blocks=False)
 
+    extra_repos_file_basename = None
+    extra_repo_keys_file_basename = None
+
     # Create docker_dir - a temporary directory which will have Dockerfile and
     # scripts to build the container.
     docker_dir = mkdtemp()
     dockerfile = os.path.join(docker_dir, 'Dockerfile')
+
+    if extra_repos_file:
+        shutil.copy(extra_repos_file, docker_dir)
+        extra_repos_file_basename = os.path.basename(extra_repos_file)
+
+    if extra_repo_keys_file:
+        shutil.copy(extra_repo_keys_file, docker_dir)
+        extra_repo_keys_file_basename = os.path.basename(extra_repo_keys_file)
+
     ctxt = {'dist': dist, 'release': release,
-            'maintainer': 'dbuild, dbuild@test.com', }
+            'maintainer': 'dbuild, dbuild@test.com',
+            'extra_repos_file': extra_repos_file_basename,
+            'extra_repo_keys_file': extra_repo_keys_file_basename}
 
     # Write Dockerfile under docker_dir
     with open(dockerfile, 'w') as d:
@@ -107,10 +122,12 @@ def create_docker_dir(dist, release):
 
 def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
                  docker_url='unix://var/run/docker.sock', dist='ubuntu',
-                 release='trusty'):
+                 release='trusty', extra_repos_file=None,
+                 extra_repo_keys_file=None):
     c = docker_client(docker_url)
 
-    docker_path = create_docker_dir(dist, release)
+    docker_path = create_docker_dir(dist, release, extra_repos_file,
+                                    extra_repo_keys_file)
 
     print "Starting %s Package Build" % build_type
     image_tag = 'dbuild-' + dist + '/' + release
@@ -181,6 +198,11 @@ def main(argv=sys.argv):
                     help='Linux dist to use for container to build')
     ap.add_argument('--release', type=str, default='trusty',
                     help='Linux release name')
+    ap.add_argument('--extra_repos_file', type=str,
+                    help='A file which contain apt source specs which is \
+                    suitable for apt sources.list file')
+    ap.add_argument('--extra_repo_keys_file', type=str,
+                    help='A file which contain all keys for any extra repos')
 
     args = ap.parse_args()
 
@@ -193,7 +215,9 @@ def main(argv=sys.argv):
         docker_build(build_dir=args.build_dir,
                      build_type='source', source_dir=args.source_dir,
                      force_rm=args.force_rm, docker_url=args.docker_url,
-                     dist=args.dist, release=args.release)
+                     dist=args.dist, release=args.release,
+                     extra_repos_file=args.extra_repos_file,
+                     extra_repo_keys_file=args.extra_repo_keys_file)
     except exceptions.DbuildSourceBuildFailedException:
         print 'ERROR | Source build failed for build directory: %s' \
             % args.build_dir
@@ -203,7 +227,9 @@ def main(argv=sys.argv):
         docker_build(build_dir=args.build_dir,
                      build_type='binary', source_dir=args.source_dir,
                      force_rm=args.force_rm, docker_url=args.docker_url,
-                     dist=args.dist, release=args.release)
+                     dist=args.dist, release=args.release,
+                     extra_repos_file=args.extra_repos_file,
+                     extra_repo_keys_file=args.extra_repo_keys_file)
     except exceptions.DbuildBinaryBuildFailedException:
         print 'ERROR | Binary build failed for build directory: %s' \
             % args.build_dir
