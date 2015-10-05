@@ -186,22 +186,22 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
 def main(argv=sys.argv):
     ap = argparse.ArgumentParser(
         description='Build debian packages in docker container')
-    ap.add_argument('--build_dir', type=str, help='package build directory')
-    ap.add_argument('--source_dir', type=str, default='source',
+    ap.add_argument('--build-dir', type=str, help='package build directory')
+    ap.add_argument('--source-dir', type=str, default='source',
                     help='subdirectory of build_dir where sources kept')
-    ap.add_argument('--force_rm', action='store_true', default=False,
+    ap.add_argument('--force-rm', action='store_true', default=False,
                     help='Remove the containers even if build failed')
-    ap.add_argument('--docker_url', type=str,
+    ap.add_argument('--docker-url', type=str,
                     default='unix://var/run/docker.sock',
                     help='Docker url, it can be unix socket or tcp url')
     ap.add_argument('--dist', type=str, default='ubuntu',
                     help='Linux dist to use for container to build')
     ap.add_argument('--release', type=str, default='trusty',
                     help='Linux release name')
-    ap.add_argument('--extra_repos_file', type=str,
+    ap.add_argument('--extra-repos-file', type=str,
                     help='A file which contain apt source specs which is \
                     suitable for apt sources.list file')
-    ap.add_argument('--extra_repo_keys_file', type=str,
+    ap.add_argument('--extra-repo-keys-file', type=str,
                     help='A file which contain all keys for any extra repos')
 
     args = ap.parse_args()
