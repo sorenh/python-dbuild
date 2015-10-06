@@ -123,13 +123,9 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
     if os.path.exists(os.path.join(build_dir, extra_repos_file)):
         command[2] += 'cp /build/%s \
         /etc/apt/sources.list.d/dbuild-extra-repos.list && ' % extra_repos_file
-    else:
-        raise DbuildBuildFailedException('wrong extra repos file')
 
     if os.path.exists(os.path.join(build_dir, extra_repo_keys_file)):
         command[2] += 'apt-key add /build/%s && ' % extra_repo_keys_file
-    else:
-        raise DbuildBuildFailedException('wrong extra repo keys file')
 
     command[2] += 'export DEBIAN_FRONTEND=noninteractive; apt-get -y update \
                    && apt-get -y dist-upgrade && '
@@ -186,7 +182,7 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
 def main(argv=sys.argv):
     ap = argparse.ArgumentParser(
         description='Build debian packages in docker container')
-    ap.add_argument('--build-dir', type=str, help='package build directory')
+    ap.add_argument('build_dir', type=str, help='package build directory')
     ap.add_argument('--source-dir', type=str, default='source',
                     help='subdirectory of build_dir where sources kept')
     ap.add_argument('--force-rm', action='store_true', default=False,
@@ -209,11 +205,6 @@ def main(argv=sys.argv):
                     help='Whether to use docker build cache or not')
 
     args = ap.parse_args()
-
-    if (not args.build_dir):
-        print 'build_dir must be provided'
-        ap.print_help()
-        sys.exit(1)
 
     try:
         docker_build(build_dir=args.build_dir,
