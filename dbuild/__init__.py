@@ -21,6 +21,7 @@ def build_image(docker_client, path, tag, nocache=False):
         path=path, rm=True, forcerm=True, tag=tag, decode=True,
         nocache=nocache)]
     message = ''
+    error = ''
     for l in lines:
         if isinstance(l, dict):
             error = ''.join(l.values())
@@ -80,7 +81,7 @@ def remove_container(docker_client, container, force=False):
     return docker_client.remove_container(container=container, force=force)
 
 
-def create_docker_dir(dist, release):
+def create_dockerfile(dist, release, docker_dir):
     """Create docker directory and populate it"""
     PATH = os.path.dirname(os.path.abspath(__file__))
     TMPL_ENV = Environment(
@@ -88,9 +89,6 @@ def create_docker_dir(dist, release):
         loader=FileSystemLoader(os.path.join(PATH, 'templates')),
         trim_blocks=False)
 
-    # Create docker_dir - a temporary directory which will have Dockerfile and
-    # scripts to build the container.
-    docker_dir = mkdtemp()
     dockerfile = os.path.join(docker_dir, 'Dockerfile')
 
     ctxt = {'dist': dist, 'release': release,
@@ -104,7 +102,6 @@ def create_docker_dir(dist, release):
     # Copy scripts under docker_dir
     shutil.copytree(os.path.join(PATH, 'scripts'),
                     os.path.join(docker_dir, 'scripts'))
-    return docker_dir
 
 
 def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
@@ -139,10 +136,22 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
 
     c = docker_client(docker_url)
     print "Starting %s Package Build" % build_type
-    docker_path = create_docker_dir(dist, release)
-    image_tag = 'dbuild-' + dist + '/' + release
-    response = build_image(c, docker_path, tag=image_tag,
-                           nocache=not build_cache)
+
+    # Create docker_dir - a temporary directory which will have Dockerfile and
+    # scripts to build the container.
+    docker_path = mkdtemp()
+
+    try:
+        create_dockerfile(dist, release, docker_path)
+        image_tag = 'dbuild-' + dist + '/' + release
+        response = build_image(c, docker_path, tag=image_tag,
+                               nocache=not build_cache)
+    except Exception as e:
+        raise exceptions.DbuildBuildFailedException(
+            'docker image build failed %s' % e.args)
+    finally:
+        shutil.rmtree(docker_path)
+
     print response
 
     container = create_container(c, image_tag, cwd=cwd,
@@ -170,7 +179,6 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
                 build_type, container.get('Id'))
             build_rv = False
 
-    shutil.rmtree(docker_path)
     if build_rv:
         return build_rv
     elif build_type == 'source':
