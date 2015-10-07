@@ -18,16 +18,16 @@ def docker_client(url='unix://var/run/docker.sock'):
 def build_image(docker_client, path, tag, nocache=False):
     """ Build docker image"""
     lines = [line.values()[0] for line in docker_client.build(
-        path=path, rm=True, forcerm=True, tag=tag, decode=True, nocache=nocache)]
-    if any(isinstance(x, dict) for x in lines):
-        message = ''
-        for l in lines:
-            if isinstance(l, dict):
-                error = ''.join(l.values())
-                message += error
-            else:
-                message += l
-
+        path=path, rm=True, forcerm=True, tag=tag, decode=True,
+        nocache=nocache)]
+    message = ''
+    for l in lines:
+        if isinstance(l, dict):
+            error = ''.join(l.values())
+            message += error
+        else:
+            message += l
+    if error:
         raise exceptions.DbuildDockerBuildFailedException(
             '''Docker build failed
 Error message: %s
@@ -106,45 +106,47 @@ def create_docker_dir(dist, release):
                     os.path.join(docker_dir, 'scripts'))
     return docker_dir
 
+
 def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
                  docker_url='unix://var/run/docker.sock', dist='ubuntu',
                  release='trusty', extra_repos_file='repos',
                  extra_repo_keys_file='keys', build_cache=True):
-    c = docker_client(docker_url)
 
-    docker_path = create_docker_dir(dist, release)
-
-    print "Starting %s Package Build" % build_type
-    image_tag = 'dbuild-' + dist + '/' + release
-    response = build_image(c, docker_path, tag=image_tag, nocache=not build_cache)
-    print response
-    command=['bash', '-c', '']
+    command = ''
 
     if os.path.exists(os.path.join(build_dir, extra_repos_file)):
-        command[2] += 'cp /build/%s \
+        command += 'cp /build/%s \
         /etc/apt/sources.list.d/dbuild-extra-repos.list && ' % extra_repos_file
 
     if os.path.exists(os.path.join(build_dir, extra_repo_keys_file)):
-        command[2] += 'apt-key add /build/%s && ' % extra_repo_keys_file
+        command += 'apt-key add /build/%s && ' % extra_repo_keys_file
 
-    command[2] += 'export DEBIAN_FRONTEND=noninteractive; apt-get -y update \
+    command += 'export DEBIAN_FRONTEND=noninteractive; apt-get -y update \
                    && apt-get -y dist-upgrade && '
 
     if build_type == 'source':
-        command[2] += 'dpkg-buildpackage -S -nc -uc -us'
+        command += 'dpkg-buildpackage -S -nc -uc -us'
         cwd = '/build/' + source_dir
     elif build_type == 'binary':
-        command[2] += "dpkg-source -x /build/*.dsc /build/pkgbuild/ && \
+        command += "dpkg-source -x /build/*.dsc /build/pkgbuild/ && \
                       cd /build/pkgbuild && \
                       /usr/lib/pbuilder/pbuilder-satisfydepends && \
                       dpkg-buildpackage"
         cwd = '/build'
     else:
-        shutil.rmtree(docker_path)
         raise exceptions.DbuildBuildFailedException(
             'Unknown build_type: %s' % build_type)
 
-    container = create_container(c, image_tag, command=command, cwd=cwd,
+    c = docker_client(docker_url)
+    print "Starting %s Package Build" % build_type
+    docker_path = create_docker_dir(dist, release)
+    image_tag = 'dbuild-' + dist + '/' + release
+    response = build_image(c, docker_path, tag=image_tag,
+                           nocache=not build_cache)
+    print response
+
+    container = create_container(c, image_tag, cwd=cwd,
+                                 command=['bash', '-c', command],
                                  shared_volumes={build_dir: '/build'})
     print(container)
     response = start_container(c, container)
