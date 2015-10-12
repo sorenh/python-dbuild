@@ -107,7 +107,27 @@ def create_dockerfile(dist, release, docker_dir):
 def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
                  docker_url='unix://var/run/docker.sock', dist='ubuntu',
                  release='trusty', extra_repos_file='repos',
-                 extra_repo_keys_file='keys', build_cache=True):
+                 extra_repo_keys_file='keys', build_cache=True,
+                 build_owner=None):
+    """
+    build_dir:  build directory, this directory will be mounted to /build in
+                container
+    build_type: Type of builds, - source or binary
+    source_dir: a relative path to the subdirectory of build_dir in which the
+                source code is kept
+    force_rm:   If True, remove the container even on build failure, if not
+                container will be kep in case of build failure
+    docker_url: Docker url
+    dist:       Linux distribution (ubuntu or debian)
+    release:    Release name of distribution
+    extra_repos_file: Relative path from build_dir to a file which contain any
+                        extra repo source file, which is in the format of apt
+                        sources.list.
+    extra_repo_keys_file: a file which contain any apt keys required for extra
+                          repos. It is a relative path from build_dir
+    build_cache:    Whether to use docker build cache or not
+    build_owner:    user id which will own all build files
+    """
 
     command = ''
 
@@ -133,6 +153,9 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
     else:
         raise exceptions.DbuildBuildFailedException(
             'Unknown build_type: %s' % build_type)
+
+    if build_owner:
+        command += ' && chown -R %s /build' % build_owner
 
     c = docker_client(docker_url)
     print "Starting %s Package Build" % build_type
