@@ -155,7 +155,7 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
             'Unknown build_type: %s' % build_type)
 
     if build_owner:
-        command += ' && chown -R %s /build' % build_owner
+        command += ' ; rv=$? ; chown -R %s /build ; exit $rv' % build_owner
 
     c = docker_client(docker_url)
     print "Starting %s Package Build" % build_type
