@@ -5,6 +5,8 @@ import os
 import shutil
 from dbuild import exceptions
 
+import six
+
 from jinja2 import Environment, FileSystemLoader
 from docker import Client
 from tempfile import mkdtemp
@@ -17,14 +19,14 @@ def docker_client(url='unix://var/run/docker.sock'):
 
 def build_image(docker_client, path, tag, nocache=False):
     """ Build docker image"""
-    lines = [line.values()[0] for line in docker_client.build(
+    lines = [line.popitem()[1] for line in docker_client.build(
         path=path, rm=True, forcerm=True, tag=tag, decode=True,
         nocache=nocache)]
     message = ''
     error = ''
     for l in lines:
         if isinstance(l, dict):
-            error = ''.join(l.values())
+            error = ''.join(list(l.values()))
             message += error
         else:
             message += l
@@ -44,8 +46,8 @@ def create_container(docker_client, image, name=None, command=None, env=None,
                      disable_network=False, shared_volumes=None, cwd=None):
     """ create docker containers """
     if shared_volumes:
-        volumes = shared_volumes.values()
-        binds = ['{}:{}'.format(k, v) for k, v in shared_volumes.iteritems()]
+        volumes = list(shared_volumes.values())
+        binds = ['{}:{}'.format(k, v) for k, v in six.iteritems(shared_volumes)]
         host_config = docker_client.create_host_config(binds=binds)
     else:
         host_config = None
@@ -184,7 +186,7 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
     response = start_container(c, container)
     rv = wait_container(c, container)
     logs = container_logs(c, container)
-    print('\n'.join(logs))
+    print('\n'.join([l.decode('utf-8') for l in logs]))
 
     if rv == 0:
         print('Build successful (build type: %s), removing container %s' % (
