@@ -158,7 +158,7 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
         command += ' ; rv=$? ; chown -R %s /build ; exit $rv' % build_owner
 
     c = docker_client(docker_url)
-    print "Starting %s Package Build" % build_type
+    print("Starting %s Package Build" % build_type)
 
     # Create docker_dir - a temporary directory which will have Dockerfile and
     # scripts to build the container.
@@ -175,7 +175,7 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
     finally:
         shutil.rmtree(docker_path)
 
-    print response
+    print(response)
 
     container = create_container(c, image_tag, cwd=cwd,
                                  command=['bash', '-c', command],
@@ -184,22 +184,22 @@ def docker_build(build_dir, build_type, source_dir='source', force_rm=False,
     response = start_container(c, container)
     rv = wait_container(c, container)
     logs = container_logs(c, container)
-    print '\n'.join(logs)
+    print('\n'.join(logs))
 
     if rv == 0:
-        print 'Build successful (build type: %s), removing container %s' % (
-            build_type, container.get('Id'))
+        print('Build successful (build type: %s), removing container %s' % (
+            build_type, container.get('Id')))
         remove_container(c, container, force=True)
         build_rv = True
     else:
         if force_rm:
-            print "Build failed (build type: %s), Removing container %s" % (
-                build_type, container.get('Id'))
+            print("Build failed (build type: %s), Removing container %s" % (
+                build_type, container.get('Id')))
             remove_container(c, container, force=True)
             build_rv = False
         else:
-            print "Build failed (build type: %s), keeping container %s" % (
-                build_type, container.get('Id'))
+            print("Build failed (build type: %s), keeping container %s" % (
+                build_type, container.get('Id')))
             build_rv = False
 
     if build_rv:
@@ -248,8 +248,8 @@ def main(argv=sys.argv):
                      extra_repo_keys_file=args.extra_repo_keys_file,
                      build_cache=args.build_cache)
     except exceptions.DbuildSourceBuildFailedException:
-        print 'ERROR | Source build failed for build directory: %s' \
-            % args.build_dir
+        print('ERROR | Source build failed for build directory: %s' \
+            % args.build_dir)
         return False
 
     try:
@@ -261,8 +261,8 @@ def main(argv=sys.argv):
                      extra_repo_keys_file=args.extra_repo_keys_file,
                      build_cache=args.build_cache)
     except exceptions.DbuildBinaryBuildFailedException:
-        print 'ERROR | Binary build failed for build directory: %s' \
-            % args.build_dir
+        print('ERROR | Binary build failed for build directory: %s' \
+            % args.build_dir)
         return False
 
     return True
