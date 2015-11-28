@@ -22,7 +22,7 @@ def build_image(docker_client, path, tag, nocache=False):
     message = ''
     errors = []
     for line in docker_client.build(path=path, rm=True, forcerm=True,
-                                    tag=tag, decode=True, nocache=nocache)]
+                                    tag=tag, decode=True, nocache=nocache):
         if 'stream' in line:
             yield line['stream']
         if 'error' in line:
