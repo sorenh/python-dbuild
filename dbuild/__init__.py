@@ -62,7 +62,7 @@ def wait_container(docker_client, container):
 def container_logs(docker_client, container):
     """ Get container stdout and stderr """
     for log in in docker_client.logs(container=container, stream=True,
-                                     timestamps=True)]:
+                                     timestamps=True):
         yield log.strip()
 
 
