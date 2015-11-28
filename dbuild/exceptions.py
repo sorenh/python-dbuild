@@ -9,7 +9,8 @@ Error message: %s
 
 Full build messages
 
-%s''' % (error, message))
+%s'''
+
     def __init__(self, msg, details):
         self.msg = msg
         self.details = details
