@@ -27,7 +27,6 @@ def build_image(docker_client, path, tag, nocache=False):
             yield line['stream']
         if 'error' in line:
             raise exceptions.DbuildDockerBuildFailedException(line['error'], line.get['errorDetails'])
-        return ''.join(lines)
 
 
 def create_container(docker_client, image, name=None, command=None, env=None,
@@ -61,7 +60,7 @@ def wait_container(docker_client, container):
 
 def container_logs(docker_client, container):
     """ Get container stdout and stderr """
-    for log in in docker_client.logs(container=container, stream=True,
+    for log in docker_client.logs(container=container, stream=True,
                                      timestamps=True):
         yield log.strip()
 
